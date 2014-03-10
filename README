@@ -1,0 +1,28 @@
+Sopranica generalizes your phone number so that you can send and receive calls
+and SMS from any other phone, while only providing people with a single number,
+or multiple numbers (ie. one per country) if you wish.
+
+As of 2014-03-09, Sopranica is in the very early stages of development.  Initial
+work has been done on the SMS Relay tool, which will accept XMPP messages on a
+particular JID and forward them to other JIDs given a set of forwarding rules.
+This is intended to be used with an SMS provider that offers an XMPP account for
+sending and receiving SMS.  Currently the SMS Relay tool receives SMS and logs
+them to standard out, and sends a test SMS every time the user hits Enter (until
+the user types another key and hits Enter, at which point it exits).
+
+To configure SMS Relay, put the following lines in settings-sms_relay.rb:
+
+	LOGIN_USER = <jid_of_number_you_own>
+	LOGIN_PWD = <password_for_above_user>
+	DESTINATION_JID = <jid_to_send_sms_to>
+
+In order to run SMS Relay, you need the following dependencies:
+ * Ruby 1.9+ (older versions may work) - "apt-get install ruby" or similar
+ * Blather - "gem install blather" or similar
+
+--
+  Copyright (C) 2014  Denver Gingerich <denver@ossguy.com>
+
+  Copying and distribution of this file, with or without modification,
+  are permitted in any medium without royalty provided the copyright
+  notice and this notice are preserved.
