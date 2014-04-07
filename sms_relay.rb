@@ -18,6 +18,8 @@
 # with Sopranica.  If not, see <http://www.gnu.org/licenses/>.
 
 require 'blather/client/dsl'
+require 'ffi-rzmq'
+require 'json'
 
 load 'settings-sms_relay.rb'	# has LOGIN_USER, LOGIN_PWD, and DESTINATION_JID
 
@@ -33,8 +35,26 @@ module SMSRelay
 		puts msg
 	end
 
+	def self.normalize(number)
+		if number.start_with?('011') then
+			return number[3..-1]	# TODO: stylistically, '-1' ugly
+		else
+			return '1' + number
+		end
+	end
+
 	def self.run
+		@context = ZMQ::Context.new
+
+		@pusher = @context.socket(ZMQ::PUSH)
+		@pusher.bind('ipc://spr-mapper000-receiver')
+
 		EM.run { client.run }
+	end
+
+	def self.zmq_terminate
+		@pusher.close
+		@context.terminate
 	end
 
 	setup LOGIN_USER, LOGIN_PWD
@@ -42,7 +62,19 @@ module SMSRelay
 	when_ready { log 'ready to send messages; TODO - block send until now' }
 
 	message :chat?, :body do |m|
-		log 'iMSG - ' + m.from.node + ' -> ' + m.to.node + ': ' + m.body
+		user_forward = normalize m.to.node
+		user_device = normalize m.from.node
+
+		zmq_message = {
+			'message_type'	=> 'from_user',
+			'user_forward'	=> user_forward,
+			'user_device'	=> user_device,
+			'body'		=> m.body
+		}
+		@pusher.send_string(JSON.dump zmq_message)
+
+		log 'iMSG - ' + user_device + ' -> ' + user_forward + ': ' \
+			+ m.body
 	end
 
 	message do |m|
@@ -70,10 +102,16 @@ module SMSRelay
 	end
 end
 
-SMSRelay.log 'starting Sopranica SMS Relay v0.01'
+SMSRelay.log 'starting Sopranica SMS Relay v0.02'
 
-trap(:INT) { EM.stop }
-trap(:TERM) { EM.stop }
+trap(:INT) {
+	SMSRelay.log 'application terminating at user INT request'
+	# TODO: add lock? so don't close socket while in middle of processing
+	SMSRelay.zmq_terminate
+	EM.stop
+	exit
+}
+# TODO: add TERM handler?
 
 Thread.new { SMSRelay.run }
 

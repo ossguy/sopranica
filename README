@@ -2,7 +2,7 @@ Sopranica generalizes your phone number so that you can send and receive calls
 and SMS from any other phone, while only providing people with a single number,
 or multiple numbers (ie. one per country) if you wish.
 
-As of 2014-03-09, Sopranica is in the very early stages of development.  Initial
+As of 2014-04-06, Sopranica is in somewhat early stages of development.  Initial
 work has been done on the SMS Relay tool, which will accept XMPP messages on a
 particular JID and forward them to other JIDs given a set of forwarding rules.
 This is intended to be used with an SMS provider that offers an XMPP account for
@@ -10,15 +10,46 @@ sending and receiving SMS.  Currently the SMS Relay tool receives SMS and logs
 them to standard out, and sends a test SMS every time the user hits Enter (until
 the user types another key and hits Enter, at which point it exits).
 
+SMS Relay also passes received messages on to SMS Mapper, which does a number
+translation and then passes them on to SMS Publisher.  The publisher makes an
+HTTP POST request to the API endpoint, which causes an SMS to be sent (using the
+numbers defined in the mapper).  Messages coming back are not yet implemented.
+
+SMS Relay has been tested with Vitelity's SMS-to-XMPP service.  SMS Publisher
+has been tested with Plivo's SMS sending REST API.  Other services will be added
+in the future and the code generalized to not assume any particular service.
+
 To configure SMS Relay, put the following lines in settings-sms_relay.rb:
 
 	LOGIN_USER = <jid_of_number_you_own>
 	LOGIN_PWD = <password_for_above_user>
 	DESTINATION_JID = <jid_to_send_sms_to>
 
-In order to run SMS Relay, you need the following dependencies:
+To configure SMS Mapper, put the following lines in settings-sms_mapper.rb:
+
+	OTHER_TO_USER = {
+		['12125551234', '19175551234'] => ['16475551234', '14165551234']
+	}
+	USER_TO_OTHER = OTHER_TO_USER.invert
+
+The 212 number is the recipient, the 917 number is your Plivo number, the 647
+number is your Vitelity number, and the 416 number is your cell phone number
+(you send messages from your cell to the Vitelity number and then SMS Publisher
+will send them from your Plivo number to the recipient).
+
+To configure SMS Publisher put the following lines in settings-sms_publisher.rb:
+
+	AUTH_ID = <Plivo_AUTH_ID>
+	AUTH_TOKEN = <Plivo_AUTH_TOKEN>
+
+Once all three are configured, you can start them up in any order.  After they
+have all started, SMS sent to your Vitelity number should be forwarded to the
+recipient via your Plivo number, as configured in the SMS Mapper settings file.
+
+In order to run SMS Relay/Mapper/Publisher, you need the following dependencies:
  * Ruby 1.9+ (older versions may work) - "apt-get install ruby" or similar
  * Blather - "gem install blather" or similar
+ * FFI bindings for ZeroMQ - "gem install ffi-rzmq" or similar
 
 --
   Copyright (C) 2014  Denver Gingerich <denver@ossguy.com>
