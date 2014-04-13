@@ -46,10 +46,17 @@ Once all three are configured, you can start them up in any order.  After they
 have all started, SMS sent to your Vitelity number should be forwarded to the
 recipient via your Plivo number, as configured in the SMS Mapper settings file.
 
+A fourth component, SMS Acceptor, is partly completed.  When finished, it will
+pass messages from an external user through to your cell phone (via the Mapper
+and Relay).  In the current iteration, it acts as a Plivo "message url", which
+accepts POST requests from Plivo when Plivo receives an SMS.  For now it just
+prints the values that Plivo gives it.  Eventually it'll also support non-Plivo.
+
 In order to run SMS Relay/Mapper/Publisher, you need the following dependencies:
  * Ruby 1.9+ (older versions may work) - "apt-get install ruby" or similar
  * Blather - "gem install blather" or similar
  * FFI bindings for ZeroMQ - "gem install ffi-rzmq" or similar
+ * Sinatra - "gem install sinatra" or similar
 
 --
   Copyright (C) 2014  Denver Gingerich <denver@ossguy.com>
