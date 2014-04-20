@@ -2,28 +2,31 @@ Sopranica generalizes your phone number so that you can send and receive calls
 and SMS from any other phone, while only providing people with a single number,
 or multiple numbers (ie. one per country) if you wish.
 
-As of 2014-04-06, Sopranica is in somewhat early stages of development.  Initial
-work has been done on the SMS Relay tool, which will accept XMPP messages on a
+As of 2014-04-20, Sopranica is in early stages of development.  It will send and
+receive SMS using the SMS Mapper forwarding table, though this hasn't been
+extensively tested with a large forwarding table (theoretically it works).
+
+Sopranica has 4 main parts: SMS Relay, which will accept XMPP messages on a
 particular JID and forward them to other JIDs given a set of forwarding rules.
 This is intended to be used with an SMS provider that offers an XMPP account for
-sending and receiving SMS.  Currently the SMS Relay tool receives SMS and logs
-them to standard out, and sends a test SMS every time the user hits Enter (until
-the user types another key and hits Enter, at which point it exits).
-
-SMS Relay also passes received messages on to SMS Mapper, which does a number
+sending and receiving SMS.  Currently the SMS Relay tool receives SMS, logs
+them, and passes these received messages on to SMS Mapper, which does a number
 translation and then passes them on to SMS Publisher.  The publisher makes an
 HTTP POST request to the API endpoint, which causes an SMS to be sent (using the
-numbers defined in the mapper).  Messages coming back are not yet implemented.
+numbers defined in the mapper).  Messages coming back go through SMS Acceptor.
 
 SMS Relay has been tested with Vitelity's SMS-to-XMPP service.  SMS Publisher
 has been tested with Plivo's SMS sending REST API.  Other services will be added
 in the future and the code generalized to not assume any particular service.
 
-To configure SMS Relay, put the following lines in settings-sms_relay.rb:
+To configure SMS Relay, put the following lines in
+settings-sms_relay-<forward_number>.rb:
 
 	LOGIN_USER = <jid_of_number_you_own>
 	LOGIN_PWD = <password_for_above_user>
-	DESTINATION_JID = <jid_to_send_sms_to>
+	DEFAULT_DEV = <number_to_send_sms_to_if_user_device_empty>
+
+The value of <forward_number> would be 16475551234 in the below example.
 
 To configure SMS Mapper, put the following lines in settings-sms_mapper.rb:
 
@@ -31,11 +34,13 @@ To configure SMS Mapper, put the following lines in settings-sms_mapper.rb:
 		['12125551234', '19175551234'] => ['16475551234', '14165551234']
 	}
 	USER_TO_OTHER = OTHER_TO_USER.invert
+	DEFAULT_FWD = '16475551234'
 
 The 212 number is the recipient, the 917 number is your Plivo number, the 647
 number is your Vitelity number, and the 416 number is your cell phone number
 (you send messages from your cell to the Vitelity number and then SMS Publisher
-will send them from your Plivo number to the recipient).
+will send them from your Plivo number to the recipient).  Numbers that don't
+match any of OTHER_TO_USER keys will be routed to DEFAULT_FWD with empty device.
 
 To configure SMS Publisher put the following lines in settings-sms_publisher.rb:
 
@@ -46,11 +51,12 @@ Once all three are configured, you can start them up in any order.  After they
 have all started, SMS sent to your Vitelity number should be forwarded to the
 recipient via your Plivo number, as configured in the SMS Mapper settings file.
 
-A fourth component, SMS Acceptor, is partly completed.  When finished, it will
+A fourth component, SMS Acceptor, accepts SMS from outside numbers.  It will
 pass messages from an external user through to your cell phone (via the Mapper
 and Relay).  In the current iteration, it acts as a Plivo "message url", which
 accepts POST requests from Plivo when Plivo receives an SMS.  For now it just
-prints the values that Plivo gives it.  Eventually it'll also support non-Plivo.
+prints the values that Plivo gives it and passes them onto the SMS Mapper, which
+routes SMS to the corresponding Relay.  Eventually it'll also support non-Plivo.
 
 In order to run SMS Relay/Mapper/Publisher, you need the following dependencies:
  * Ruby 1.9+ (older versions may work) - "apt-get install ruby" or similar

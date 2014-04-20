@@ -33,7 +33,7 @@ module SMSMapper
 	end
 end
 
-SMSMapper.log 'starting Sopranica SMS Mapper v0.01'
+SMSMapper.log 'starting Sopranica SMS Mapper v0.02'
 
 context = ZMQ::Context.new
 
@@ -77,10 +77,7 @@ loop do
 			SMSMapper.log 'received a message (raw): ' + stuff
 			in_message = JSON.parse stuff
 			SMSMapper.log 'formatted message: ' + in_message.to_s
-			if in_message['message_type'] != 'from_user' then
-				SMSMapper.log 'unknown message type: ' \
-					+ in_message['message_type']
-			else
+			if in_message['message_type'] == 'from_user' then
 				# TODO: do something smart if mapping not found
 				other_and_user = USER_TO_OTHER[ [
 					in_message['user_forward'],
@@ -95,6 +92,39 @@ loop do
 				publisher.send_string(JSON.dump out_message)
 				SMSMapper.log 'sent message to publish: ' \
 					+ out_message.to_s
+			elsif in_message['message_type'] == 'from_other' then
+				fwd_and_device = OTHER_TO_USER[ [
+					in_message['others_number'],
+					in_message['user_number']
+				] ]
+
+				# don't worry: user forward # is in relay addr
+				# TODO: do actual right thing when mapping nil
+				out_message = {
+					'message_type'	=> 'to_user',
+					'others_number'	=>
+						in_message['others_number'],
+					'user_number'	=>
+						in_message['user_number'],
+					'user_device'	=>
+						fwd_and_device.nil? ? '' \
+							: fwd_and_device[1],
+					'body'		=>
+						in_message['body']
+				}
+
+				relay = context.socket(ZMQ::PUSH)
+				relay.bind('ipc://spr-relay' \
+					+ (fwd_and_device.nil? ? DEFAULT_FWD \
+						: fwd_and_device[0]) \
+					+ '_000-receiver')
+				relay.send_string(JSON.dump out_message)
+				relay.close
+				SMSMapper.log 'sent message to give user: ' \
+					+ out_message.to_s
+			else
+				SMSMapper.log 'unknown message type: ' \
+					+ in_message['message_type']
 			end
 		end
 	end

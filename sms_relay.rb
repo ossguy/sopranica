@@ -21,7 +21,14 @@ require 'blather/client/dsl'
 require 'ffi-rzmq'
 require 'json'
 
-load 'settings-sms_relay.rb'	# has LOGIN_USER, LOGIN_PWD, and DESTINATION_JID
+if ARGV.size != 1 then
+	puts "Usage: sms_relay.rb <forwarding_number>"
+	exit 0
+end
+
+fwd_number = ARGV[0]
+
+load "settings-sms_relay-#{fwd_number}.rb"	# has LOGIN_USER and LOGIN_PWD
 
 module SMSRelay
 	extend Blather::DSL
@@ -43,10 +50,18 @@ module SMSRelay
 		end
 	end
 
-	def self.run
-		@context = ZMQ::Context.new
+	def self.unnormalize(number)
+		if number.start_with?('1') then
+			return number[1..-1]	# TODO: stylistically, '-1' ugly
+		else
+			return '011' + number
+		end
+	end
 
-		@pusher = @context.socket(ZMQ::PUSH)
+	def self.run(context)
+		@zmq_context = context
+
+		@pusher = @zmq_context.socket(ZMQ::PUSH)
 		@pusher.bind('ipc://spr-mapper000-receiver')
 
 		EM.run { client.run }
@@ -54,7 +69,7 @@ module SMSRelay
 
 	def self.zmq_terminate
 		@pusher.close
-		@context.terminate
+		@zmq_context.terminate
 	end
 
 	setup LOGIN_USER, LOGIN_PWD
@@ -102,34 +117,74 @@ module SMSRelay
 	end
 end
 
-SMSRelay.log 'starting Sopranica SMS Relay v0.02'
+SMSRelay.log 'starting Sopranica SMS Relay v0.04'
+
+context = ZMQ::Context.new
+
+monitor = context.socket(ZMQ::PULL)
+monitor.connect("ipc://spr-relay#{fwd_number}_000-monitor")
+
+receiver = context.socket(ZMQ::PULL)
+receiver.connect("ipc://spr-relay#{fwd_number}_000-receiver")
+
+poller = ZMQ::Poller.new
+poller.register(monitor, ZMQ::POLLIN)
+poller.register(receiver, ZMQ::POLLIN)
 
 trap(:INT) {
 	SMSRelay.log 'application terminating at user INT request'
 	# TODO: add lock? so don't close socket while in middle of processing
+	receiver.close
+	monitor.close
 	SMSRelay.zmq_terminate
 	EM.stop
 	exit
 }
 # TODO: add TERM handler?
 
-Thread.new { SMSRelay.run }
+Thread.new { SMSRelay.run(context) }
 
-count = 0
-tmp = gets
-while tmp == "\n" do
-	msg = Blather::Stanza::Message.new(DESTINATION_JID, 'TesT' + count.to_s)
-	SMSRelay.log '>>> sending message ==>'
-	SMSRelay.log_raw msg.inspect
-	SMSRelay.log '<== end of message to send'
+loop do
+	SMSRelay.log 'starting poll...'
+	poller.poll(60000)	# block for 60 seconds then process or repeat
 
-	SMSRelay.log 'oMSG - ' + SMSRelay.jid.node + ' -> ' + msg.to.node \
-		+ ': ' + msg.body
-	SMSRelay.write_to_stream msg
-	SMSRelay.log 'oMSG [sent]'
+	poller.readables.each do |socket|
+		if socket === monitor
+			monitor.recv_string(stuff = '')
+			SMSRelay.log 'received monitor message: "' + stuff \
+				+ '"; ERROR: these are currently unsupported'
+		elsif socket === receiver
+			receiver.recv_string(stuff = '')
+			SMSRelay.log 'received a message (raw): ' + stuff
+			in_message = JSON.parse stuff
+			SMSRelay.log 'formatted message: ' + in_message.to_s
+			if in_message['message_type'] == 'to_user' then
+				# TODO: handle empty userdev better; no default?
+				dst_num = in_message['user_device'].empty? ? \
+					DEFAULT_DEV : in_message['user_device']
+				# TODO: don't rely on carrier for 140-char split
+				msg = Blather::Stanza::Message.new(
+					SMSRelay.unnormalize(dst_num) + '@sms',
+					in_message['others_number'] + '->' \
+						+ in_message['user_number'] \
+						+ (in_message['user_device'] \
+							.empty? ? ' ERR' : '') \
+						+ ' ' + in_message['body']
+				)
 
-	count += 1
-	tmp = gets
+				SMSRelay.log '>>> sending message ==>'
+				SMSRelay.log_raw msg.inspect
+				SMSRelay.log '<== end of message to send'
+
+				SMSRelay.log 'oMSG - ' + SMSRelay.jid.node \
+					+ ' -> ' + msg.to.node + ': ' + msg.body
+				SMSRelay.write_to_stream msg
+				SMSRelay.log 'oMSG [sent]'
+			else
+				SMSRelay.log 'unknown message type: ' \
+					+ in_message['message_type']
+			end
+		end
+	end
+	SMSRelay.log '...done poll stuff'
 end
-
-SMSRelay.log 'application terminating at user request'

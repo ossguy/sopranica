@@ -37,7 +37,7 @@ module SMSAcceptor
 	end
 end
 
-SMSAcceptor.log 'starting Sopranica SMS Acceptor v0.01'
+SMSAcceptor.log 'starting Sopranica SMS Acceptor v0.02'
 
 context = ZMQ::Context.new
 
@@ -68,5 +68,15 @@ post '/' do
 	params.each do |param, value|
 		SMSAcceptor.log "	#{param}: #{value}"
 	end
+
+	out_message = {
+		'message_type'	=> 'from_other',
+		'others_number'	=> params[:From],
+		'user_number'	=> params[:To],
+		'body'		=> params[:Text]
+	}
+	mapper.send_string(JSON.dump out_message)
+	SMSAcceptor.log 'sent accepted message to mapper: ' + out_message.to_s
+
 	return 'ok'
 end
