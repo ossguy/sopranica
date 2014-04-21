@@ -81,6 +81,9 @@ module SMSRelay
 		user_forward = normalize m.to.node
 		user_device = normalize m.from.node
 
+		log 'iMSG - ' + user_device + ' -> ' + user_forward + ': ' \
+			+ m.body
+
 		zmq_message = {
 			'message_type'	=> 'from_user',
 			'user_forward'	=> user_forward,
@@ -89,8 +92,7 @@ module SMSRelay
 		}
 		@pusher.send_string(JSON.dump zmq_message)
 
-		log 'iMSG - ' + user_device + ' -> ' + user_forward + ': ' \
-			+ m.body
+		log 'sent: ' + zmq_message.to_s
 	end
 
 	message do |m|
