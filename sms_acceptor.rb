@@ -46,7 +46,7 @@ monitor = context.socket(ZMQ::PULL)
 monitor.connect('ipc://spr-acceptor000-monitor')
 
 mapper = context.socket(ZMQ::PUSH)
-mapper.bind('ipc://spr-mapper000-receiver')
+mapper.bind('ipc://spr-mapper000-receive_accept')
 
 poller = ZMQ::Poller.new
 poller.register(monitor, ZMQ::POLLIN)

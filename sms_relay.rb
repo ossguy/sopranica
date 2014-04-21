@@ -63,7 +63,7 @@ module SMSRelay
 		@zmq_context = context
 
 		@pusher = @zmq_context.socket(ZMQ::PUSH)
-		@pusher.bind('ipc://spr-mapper000-receiver')
+		@pusher.bind('ipc://spr-mapper000-receive_relay')
 
 		EM.run { client.run }
 	end

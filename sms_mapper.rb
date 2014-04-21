@@ -41,21 +41,26 @@ context = ZMQ::Context.new
 monitor = context.socket(ZMQ::PULL)
 monitor.connect('ipc://spr-mapper000-monitor')
 
-receiver = context.socket(ZMQ::PULL)
-receiver.connect('ipc://spr-mapper000-receiver')
+receive_accept = context.socket(ZMQ::PULL)
+receive_accept.connect('ipc://spr-mapper000-receive_accept')
+
+receive_relay = context.socket(ZMQ::PULL)
+receive_relay.connect('ipc://spr-mapper000-receive_relay')
 
 publisher = context.socket(ZMQ::PUSH)
 publisher.bind('ipc://spr-publisher000-receiver')
 
 poller = ZMQ::Poller.new
 poller.register(monitor, ZMQ::POLLIN)
-poller.register(receiver, ZMQ::POLLIN)
+poller.register(receive_accept, ZMQ::POLLIN)
+poller.register(receive_relay, ZMQ::POLLIN)
 
 trap(:INT) {
 	SMSMapper.log 'application terminating at user request'
 	# TODO: add lock? so don't close socket while in middle of processing
 	monitor.close
-	receiver.close
+	receive_accept.close
+	receive_relay.close
 	publisher.close
 	context.terminate
 	exit
@@ -72,9 +77,9 @@ loop do
 			monitor.recv_string(stuff = '')
 			SMSMapper.log 'received monitor message: "' + stuff \
 				+ '"; ERROR: these are currently unsupported'
-		elsif socket === receiver
+		elsif socket === receive_relay or socket === receive_accept then
 			#stuff = receiver.recv_string(ZMQ::DONTWAIT)
-			receiver.recv_string(stuff = '')
+			socket.recv_string(stuff = '')
 			SMSMapper.log 'received a message (raw): ' + stuff
 			in_message = JSON.parse stuff
 			SMSMapper.log 'formatted message: ' + in_message.to_s
