@@ -29,15 +29,16 @@ set :port, 23470
 module SMSAcceptor
 	def self.log(msg)
 		t = Time.now
-		puts "LOG %d.%09d: %s" % [t.to_i, t.nsec, msg]
+		log_raw "LOG %d.%09d: %s" % [t.to_i, t.nsec, msg]
 	end
 
 	def self.log_raw(msg)
 		puts msg
+		STDOUT.flush
 	end
 end
 
-SMSAcceptor.log 'starting Sopranica SMS Acceptor v0.02'
+SMSAcceptor.log 'starting Sopranica SMS Acceptor v0.03'
 
 context = ZMQ::Context.new
 

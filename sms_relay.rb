@@ -35,11 +35,12 @@ module SMSRelay
 
 	def self.log(msg)
 		t = Time.now
-		puts "LOG %d.%09d: %s" % [t.to_i, t.nsec, msg]
+		log_raw "LOG %d.%09d: %s" % [t.to_i, t.nsec, msg]
 	end
 
 	def self.log_raw(msg)
 		puts msg
+		STDOUT.flush
 	end
 
 	def self.normalize(number)
@@ -117,7 +118,7 @@ module SMSRelay
 	end
 end
 
-SMSRelay.log 'starting Sopranica SMS Relay v0.04'
+SMSRelay.log 'starting Sopranica SMS Relay v0.05'
 
 context = ZMQ::Context.new
 

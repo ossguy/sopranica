@@ -25,15 +25,16 @@ load 'settings-sms_mapper.rb'	# has all the mappings (for now)
 module SMSMapper
 	def self.log(msg)
 		t = Time.now
-		puts "LOG %d.%09d: %s" % [t.to_i, t.nsec, msg]
+		log_raw "LOG %d.%09d: %s" % [t.to_i, t.nsec, msg]
 	end
 
 	def self.log_raw(msg)
 		puts msg
+		STDOUT.flush
 	end
 end
 
-SMSMapper.log 'starting Sopranica SMS Mapper v0.02'
+SMSMapper.log 'starting Sopranica SMS Mapper v0.03'
 
 context = ZMQ::Context.new
 

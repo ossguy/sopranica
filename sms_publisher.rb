@@ -30,15 +30,16 @@ puts AUTH_ID
 module SMSPublisher
 	def self.log(msg)
 		t = Time.now
-		puts "LOG %d.%09d: %s" % [t.to_i, t.nsec, msg]
+		log_raw "LOG %d.%09d: %s" % [t.to_i, t.nsec, msg]
 	end
 
 	def self.log_raw(msg)
 		puts msg
+		STDOUT.flush
 	end
 end
 
-SMSPublisher.log 'starting Sopranica SMS Publisher v0.01'
+SMSPublisher.log 'starting Sopranica SMS Publisher v0.02'
 
 context = ZMQ::Context.new
 
