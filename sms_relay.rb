@@ -59,11 +59,11 @@ module SMSRelay
 		end
 	end
 
-	def self.run(context)
+	def self.run(context, fwd_number)
 		@zmq_context = context
 
 		@pusher = @zmq_context.socket(ZMQ::PUSH)
-		@pusher.bind('ipc://spr-mapper000-receive_relay')
+		@pusher.bind('ipc://spr-mapper000-receive_relay' + fwd_number)
 
 		EM.run { client.run }
 	end
@@ -120,7 +120,7 @@ module SMSRelay
 	end
 end
 
-SMSRelay.log 'starting Sopranica SMS Relay v0.05'
+SMSRelay.log 'starting Sopranica SMS Relay v0.06'
 
 context = ZMQ::Context.new
 
@@ -145,7 +145,7 @@ trap(:INT) {
 }
 # TODO: add TERM handler?
 
-Thread.new { SMSRelay.run(context) }
+Thread.new { SMSRelay.run(context, fwd_number) }
 
 loop do
 	SMSRelay.log 'starting poll...'
@@ -162,12 +162,11 @@ loop do
 			in_message = JSON.parse stuff
 			SMSRelay.log 'formatted message: ' + in_message.to_s
 			if in_message['message_type'] == 'to_user' then
-				# TODO: handle empty userdev better; no default?
-				dst_num = in_message['user_device'].empty? ? \
-					DEFAULT_DEV : in_message['user_device']
 				# TODO: don't rely on carrier for 140-char split
 				msg = Blather::Stanza::Message.new(
-					SMSRelay.unnormalize(dst_num) + '@sms',
+					SMSRelay.unnormalize(
+						in_message['user_device']
+					) + '@sms',
 					in_message['others_number'] + '->' \
 						+ in_message['user_number'] \
 						+ (in_message['user_device'] \

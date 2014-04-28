@@ -22,6 +22,34 @@ require 'json'
 
 load 'settings-sms_mapper.rb'	# has all the mappings (for now)
 
+# TODO: MUST enforce at <fwd>,<usernum> validation/insertion time that:
+# * for each device in USERNUM_TO_DEVICES[<usernum>] that:
+# ** for each other_usernum in DEVICE_TO_USERNUMS[<device>]:
+# *** there is no FWD_TO_OTHER[<fwd>, <other_usernum>] in existence
+# * only if there are no matches in all above iterations can we add the mapping
+# Obviously, also confirm that the <other>,<usernum> and <fwd>,<usernum> pairs
+# do not exist.  With the above, we can guarantee that when going through the
+# list of <usernum>s for a given device, that the first <fwd>,<usernum> will be
+# the right one (ie. this is the only match; it is unambiguously the right one).
+# This is while searching the list when we receive SMS from one of the devices.
+
+FWD_AND_USERNUM_TO_OTHER = {}
+OTHER_AND_USERNUM_TO_FWD.each do |other_and_usernum, fwdnum|
+	FWD_AND_USERNUM_TO_OTHER[  [fwdnum, other_and_usernum[1] ]  ] =
+		other_and_usernum[0]
+end
+
+DEVICE_TO_USERNUMS = {}
+USERNUM_TO_DEVICES.each do |usernum, devices|
+	devices.each do |device|
+		if DEVICE_TO_USERNUMS[device] then
+			DEVICE_TO_USERNUMS[device].push(usernum)
+		else
+			DEVICE_TO_USERNUMS[device] = [ usernum ]
+		end
+	end
+end
+
 module SMSMapper
 	def self.log(msg)
 		t = Time.now
@@ -34,7 +62,7 @@ module SMSMapper
 	end
 end
 
-SMSMapper.log 'starting Sopranica SMS Mapper v0.03'
+SMSMapper.log 'starting Sopranica SMS Mapper v0.04'
 
 context = ZMQ::Context.new
 
@@ -44,8 +72,13 @@ monitor.connect('ipc://spr-mapper000-monitor')
 receive_accept = context.socket(ZMQ::PULL)
 receive_accept.connect('ipc://spr-mapper000-receive_accept')
 
-receive_relay = context.socket(ZMQ::PULL)
-receive_relay.connect('ipc://spr-mapper000-receive_relay')
+receive_relays = []
+# ugly to iterate this list again, but better not to make new one we don't use
+OTHER_AND_USERNUM_TO_FWD.each do |other_and_usernum, fwdnum|
+	receive_relay = context.socket(ZMQ::PULL)
+	receive_relay.connect('ipc://spr-mapper000-receive_relay' + fwdnum)
+	receive_relays.push(receive_relay)
+end
 
 publisher = context.socket(ZMQ::PUSH)
 publisher.bind('ipc://spr-publisher000-receiver')
@@ -53,14 +86,19 @@ publisher.bind('ipc://spr-publisher000-receiver')
 poller = ZMQ::Poller.new
 poller.register(monitor, ZMQ::POLLIN)
 poller.register(receive_accept, ZMQ::POLLIN)
-poller.register(receive_relay, ZMQ::POLLIN)
+
+receive_relays.each do |receive_relay|
+	poller.register(receive_relay, ZMQ::POLLIN)
+end
 
 trap(:INT) {
 	SMSMapper.log 'application terminating at user request'
 	# TODO: add lock? so don't close socket while in middle of processing
 	monitor.close
 	receive_accept.close
-	receive_relay.close
+	receive_relays.each do |receive_relay|
+		receive_relay.close
+	end
 	publisher.close
 	context.terminate
 	exit
@@ -77,7 +115,9 @@ loop do
 			monitor.recv_string(stuff = '')
 			SMSMapper.log 'received monitor message: "' + stuff \
 				+ '"; ERROR: these are currently unsupported'
-		elsif socket === receive_relay or socket === receive_accept then
+		else
+			# TODO: check if socket in receive_relays or
+			#  socket === receive_accept (so we know it's expected)
 			#stuff = receiver.recv_string(ZMQ::DONTWAIT)
 			socket.recv_string(stuff = '')
 			SMSMapper.log 'received a message (raw): ' + stuff
@@ -85,49 +125,75 @@ loop do
 			SMSMapper.log 'formatted message: ' + in_message.to_s
 			if in_message['message_type'] == 'from_user' then
 				# TODO: do something smart if mapping not found
-				other_and_user = USER_TO_OTHER[ [
-					in_message['user_forward'],
-					in_message['user_device']
-				] ]
-				out_message = {
-					'message_type'	=> 'to_other',
-					'others_number'	=> other_and_user[0],
-					'user_number'	=> other_and_user[1],
-					'body'		=> in_message['body']
-				}
-				publisher.send_string(JSON.dump out_message)
-				SMSMapper.log 'sent message to publish: ' \
-					+ out_message.to_s
+				DEVICE_TO_USERNUMS[ in_message['user_device'] ].
+					each do |usernum|
+
+					othersnum = FWD_AND_USERNUM_TO_OTHER[ [
+						in_message['user_forward'],
+						usernum
+					] ]
+
+					if othersnum.nil? then
+						next
+					end
+
+					out_message = {
+						'message_type'	=> 'to_other',
+						'others_number'	=> othersnum,
+						'user_number'	=> usernum,
+						'body'		=>
+							in_message['body']
+					}
+					publisher.send_string(
+						JSON.dump out_message)
+					SMSMapper.log(
+						'sent message to publish: ' \
+						+ out_message.to_s)
+					break
+				end
 			elsif in_message['message_type'] == 'from_other' then
-				fwd_and_device = OTHER_TO_USER[ [
+				fwdnum = OTHER_AND_USERNUM_TO_FWD[ [
 					in_message['others_number'],
 					in_message['user_number']
 				] ]
 
+				if fwdnum.nil? then
+					fwdnum = DEFAULT_FWD
+					SMSMapper.log 'using default: ' + fwdnum
+				end
+
+				SMSMapper.log(
+					'sending out message using fwdnum: ' \
+					+ fwdnum)
+
 				# don't worry: user forward # is in relay addr
 				# TODO: do actual right thing when mapping nil
-				out_message = {
-					'message_type'	=> 'to_user',
-					'others_number'	=>
-						in_message['others_number'],
-					'user_number'	=>
-						in_message['user_number'],
-					'user_device'	=>
-						fwd_and_device.nil? ? '' \
-							: fwd_and_device[1],
-					'body'		=>
-						in_message['body']
-				}
 
 				relay = context.socket(ZMQ::PUSH)
-				relay.bind('ipc://spr-relay' \
-					+ (fwd_and_device.nil? ? DEFAULT_FWD \
-						: fwd_and_device[0]) \
+				relay.bind('ipc://spr-relay' + fwdnum \
 					+ '_000-receiver')
-				relay.send_string(JSON.dump out_message)
+
+				USERNUM_TO_DEVICES[ in_message['user_number'] ].
+					each do |device|
+
+					# TODO stop whitespace cheat; move2 func
+					out_message = {
+						'message_type'	=> 'to_user',
+						'others_number'	=>
+						    in_message['others_number'],
+						'user_number'	=>
+						    in_message['user_number'],
+						'user_device'	=> device,
+						'body'		=>
+						    in_message['body']
+					}
+
+					relay.send_string(JSON.dump out_message)
+					SMSMapper.log(
+						'sent message to give user: ' \
+						+ out_message.to_s)
+				end
 				relay.close
-				SMSMapper.log 'sent message to give user: ' \
-					+ out_message.to_s
 			else
 				SMSMapper.log 'unknown message type: ' \
 					+ in_message['message_type']
