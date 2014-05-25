@@ -80,6 +80,8 @@ In order to run SMS Relay/Mapper/Publisher, you need the following dependencies:
  * Ruby 1.9+ (older versions may work) - "apt-get install ruby" or similar
  * Blather - "gem install blather" or similar
  * FFI bindings for ZeroMQ - "gem install ffi-rzmq" or similar
+
+If using the Plivo frontend you also need (not required in Vitelity-only setup):
  * Sinatra - "gem install sinatra" or similar
 
 --
