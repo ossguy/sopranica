@@ -62,7 +62,7 @@ module SMSMapper
 	end
 end
 
-SMSMapper.log 'starting Sopranica SMS Mapper v0.04'
+SMSMapper.log 'starting Sopranica SMS Mapper v0.05'
 
 context = ZMQ::Context.new
 
@@ -72,6 +72,9 @@ monitor.connect('ipc://spr-mapper000-monitor')
 receive_accept = context.socket(ZMQ::PULL)
 receive_accept.connect('ipc://spr-mapper000-receive_accept')
 
+receive_accept2 = context.socket(ZMQ::PULL)
+receive_accept2.connect('ipc://spr-mapper000-receive_accept2')
+
 receive_relays = []
 # ugly to iterate this list again, but better not to make new one we don't use
 OTHER_AND_USERNUM_TO_FWD.each do |other_and_usernum, fwdnum|
@@ -80,12 +83,10 @@ OTHER_AND_USERNUM_TO_FWD.each do |other_and_usernum, fwdnum|
 	receive_relays.push(receive_relay)
 end
 
-publisher = context.socket(ZMQ::PUSH)
-publisher.bind('ipc://spr-publisher000-receiver')
-
 poller = ZMQ::Poller.new
 poller.register(monitor, ZMQ::POLLIN)
 poller.register(receive_accept, ZMQ::POLLIN)
+poller.register(receive_accept2, ZMQ::POLLIN)
 
 receive_relays.each do |receive_relay|
 	poller.register(receive_relay, ZMQ::POLLIN)
@@ -96,10 +97,10 @@ trap(:INT) {
 	# TODO: add lock? so don't close socket while in middle of processing
 	monitor.close
 	receive_accept.close
+	receive_accept2.close
 	receive_relays.each do |receive_relay|
 		receive_relay.close
 	end
-	publisher.close
 	context.terminate
 	exit
 }
@@ -118,6 +119,7 @@ loop do
 		else
 			# TODO: check if socket in receive_relays or
 			#  socket === receive_accept (so we know it's expected)
+			#  and socket === receive_accept2 (until hack finished)
 			#stuff = receiver.recv_string(ZMQ::DONTWAIT)
 			socket.recv_string(stuff = '')
 			SMSMapper.log 'received a message (raw): ' + stuff
@@ -144,11 +146,30 @@ loop do
 						'body'		=>
 							in_message['body']
 					}
+
+					publisher = context.socket(ZMQ::PUSH)
+					publisher.bind('ipc://spr-publisher' + \
+						usernum + '_000-receiver')
+
+					# TODO: remove hack for old publisher
+					if usernum == '19177653688' then
+						publisher.close
+						publisher = context.socket(
+							ZMQ::PUSH)
+						publisher.bind('ipc://spr-' + \
+							'publisher000-receiver')
+						SMSMapper.log('in publish hack')
+					else
+						SMSMapper.log('no publish hack')
+					end
+
 					publisher.send_string(
 						JSON.dump out_message)
 					SMSMapper.log(
 						'sent message to publish: ' \
 						+ out_message.to_s)
+
+					publisher.close
 					break
 				end
 			elsif in_message['message_type'] == 'from_other' then

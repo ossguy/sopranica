@@ -20,6 +20,10 @@ SMS Relay has been tested with Vitelity's SMS-to-XMPP service.  SMS Publisher
 has been tested with Plivo's SMS sending REST API.  Other services will be added
 in the future and the code generalized to not assume any particular service.
 
+Note that an experimental SMS publisher/acceptor for Vitelity is now available.
+It is configured in the same way as SMS Relay (see below); the settings file is
+at settings-sms_relay-pubsub-<user_number>.rb .
+
 To configure SMS Relay, put the following lines in
 settings-sms_relay-<forward_number>.rb:
 
@@ -57,6 +61,13 @@ To configure SMS Publisher put the following lines in settings-sms_publisher.rb:
 Once all three are configured, you can start them up in any order.  After they
 have all started, SMS sent to your Vitelity number should be forwarded to the
 recipient via your Plivo number, as configured in the SMS Mapper settings file.
+
+WARNING: For now, you must modify sms_mapper.rb to add any numbers that the
+Plivo publisher will be using.  Specifically, the "if" block under "remove hack"
+must include the numbers in its expression so that the hack is performed.  This
+is a temporary measure to support the experimental Vitelity publisher/acceptor
+(see above).  Once we've updated the original Publisher to support the new
+naming scheme, this will not be needed (the hack allows it to work unchanged).
 
 A fourth component, SMS Acceptor, accepts SMS from outside numbers.  It will
 pass messages from an external user through to your cell phone (via the Mapper
