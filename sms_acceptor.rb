@@ -65,7 +65,6 @@ trap(:INT) {
 
 post '/' do
 	SMSAcceptor.log 'received a POST with the following data:'
-	# TODO: pass param[:To], :From, and :Text to mapper (use right msg type)
 	params.each do |param, value|
 		SMSAcceptor.log "	#{param}: #{value}"
 	end
