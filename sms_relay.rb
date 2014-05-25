@@ -120,7 +120,7 @@ module SMSRelay
 	end
 end
 
-SMSRelay.log 'starting Sopranica SMS Relay v0.06'
+SMSRelay.log 'starting Sopranica SMS Relay v0.08'
 
 context = ZMQ::Context.new
 
@@ -182,6 +182,18 @@ loop do
 					+ ' -> ' + msg.to.node + ': ' + msg.body
 				SMSRelay.write_to_stream msg
 				SMSRelay.log 'oMSG [sent]'
+
+				# add a delay because some recipients drop
+				#  messages when sent too fast; some results:
+				#  * 1.0 is fine (over ~50 msgs) but is too slow
+				#  * 0.1 is ok (1 lost over ~100 msgs)
+				#  * 0.01 is ok (1 lost over ~50 msgs)
+				# TODO: find way to guarantee receipt w/o delay
+				delay_seconds = 0.1
+				SMSRelay.log 'delay the next poll by ' \
+					+ delay_seconds.to_s \
+					+ 's to ensure receiver not overloaded'
+				sleep delay_seconds
 			else
 				SMSRelay.log 'unknown message type: ' \
 					+ in_message['message_type']
