@@ -157,7 +157,7 @@ loop do
 						publisher = context.socket(
 							ZMQ::PUSH)
 						publisher.bind('ipc://spr-' + \
-							'publisher000-receiver')
+							'dispenser000-receiver')
 						SMSMapper.log('in publish hack')
 					else
 						SMSMapper.log('no publish hack')
