@@ -30,19 +30,19 @@ settings-sms_relay-<forward_number>.rb:
 	LOGIN_USER = <jid_of_number_you_own>
 	LOGIN_PWD = <password_for_above_user>
 
-The value of <forward_number> would be 16475551234 in the below example.  Note
+The value of <forward_number> would be 16475550199 in the below example.  Note
 that multiple SMS Relay processes can be run, one for each <forward_number>.
 The SMS Mapper settings must include entries for each Relay's <forward_number>.
 
 To configure SMS Mapper, put the following lines in settings-sms_mapper.rb:
 
 	OTHER_AND_USERNUM_TO_FWD = {
-		['12125551234', '19175551234'] => '16475551234'
+		['12125550199', '19175550199'] => '16475550199'
 	}
 	USERNUM_TO_DEVICES = {
-		'19175551234' => ['14165551234', '15145551234']
+		'19175550199' => ['14165550199', '15145550199']
 	}
-	DEFAULT_FWD = '16475551234'
+	DEFAULT_FWD = '16475550199'
 
 The 212 number is the recipient, the 917 number is your Plivo number, the 647
 number is your Vitelity number, and the 416 number is one of your cell numbers
