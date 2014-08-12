@@ -1,0 +1,5 @@
+LOGIN_USER = '8082061212@sms'
+LOGIN_PWD = 'test123'
+
+LOGIN_HOST = 'localhost'
+LOGIN_PORT = '25467'

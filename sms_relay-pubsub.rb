@@ -30,6 +30,10 @@ fwd_number = ARGV[0]
 
 load "settings-sms_relay-pubsub-#{fwd_number}.rb" # has LOGIN_USER and LOGIN_PWD
 
+# use default host and port (implied by the JID) if user didn't define them
+LOGIN_HOST = nil unless defined? LOGIN_HOST
+LOGIN_PORT = nil unless defined? LOGIN_PORT
+
 module SMSPubSub
 	extend Blather::DSL
 
@@ -73,7 +77,7 @@ module SMSPubSub
 		@zmq_context.terminate
 	end
 
-	setup LOGIN_USER, LOGIN_PWD
+	setup LOGIN_USER, LOGIN_PWD, LOGIN_HOST, LOGIN_PORT
 
 	when_ready { log 'ready to send messages; TODO - block send until now' }
 
@@ -120,7 +124,7 @@ module SMSPubSub
 	end
 end
 
-SMSPubSub.log 'starting Sopranica SMS Pub/Sub v0.09'
+SMSPubSub.log 'starting Sopranica SMS Pub/Sub v0.10'
 
 context = ZMQ::Context.new
 

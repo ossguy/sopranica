@@ -2,10 +2,32 @@ Sopranica generalizes your phone number so that you can send and receive calls
 and SMS from any other phone, while only providing people with a single number,
 or multiple numbers (ie. one per country) if you wish.
 
-As of 2014-07-13, Sopranica is in early stages of development.  It will send and
+As of 2014-08-11, Sopranica is in early stages of development.  It will send and
 receive SMS using the SMS Mapper forwarding table, which has been tested with a
 reasonably-sized forwarding list, though with just two usernums so far.  It does
 not yet support call forwarding or DISA.  These are next on the list to add.
+
+
+The Sopranica source tree includes black-box tests that exercise Sopranica's
+functionality.  To run the test suite: checkout Sopranica, install the
+dependencies (see bottom of this file) and then execute the following commands
+in a POSIX shell from the Sopranica directory:
+
+$ cd test
+$ ./generate_config.sh
+$ cd sms
+$ ../run_tests.sh
+
+The tests will print basic information to standard output with more detailed
+information saved in a test/out_$DATE directory.  If the tests fail on your
+system, instructions for reporting this will be printed.  Please do send in the
+report as it will help improve Sopranica.
+
+(Note that the "sms" directory name is incidental - because of the way Vitelity
+works (it is the only supported XMPP carrier, for now), the domain used by the
+XMPP server must be "sms".  Since Vines prefers a configuration directory named
+after its domain, the configuration directory is thus called "sms".)
+
 
 Sopranica has 4 main parts: SMS Relay, which will accept XMPP messages on a
 particular JID and forward them to other JIDs given a set of forwarding rules.
@@ -83,6 +105,9 @@ In order to run SMS Relay/Mapper/Dispenser, you need the following dependencies:
 
 If using the Plivo frontend you also need (not required in Vitelity-only setup):
  * Sinatra - "gem install sinatra" or similar
+
+To run the tests, you also need the following (for now Sinatra is not required):
+ * Vines - "gem install vines" or similar
 
 --
   Copyright (C) 2014  Denver Gingerich <denver@ossguy.com>
