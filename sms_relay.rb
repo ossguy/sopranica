@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 #
-# Copyright (C) 2014  Denver Gingerich <denver@ossguy.com>
+# Copyright (C) 2014-2015  Denver Gingerich <denver@ossguy.com>
 #
 # This file is part of Sopranica.
 #
@@ -64,12 +64,35 @@ module SMSRelay
 	end
 
 	def self.run(context, fwd_number)
+		@last_iq_id = ''
+		@last_reply_address = ''
 		@zmq_context = context
 
 		@pusher = @zmq_context.socket(ZMQ::PUSH)
 		@pusher.bind('ipc://spr-mapper000-receive_relay' + fwd_number)
 
 		EM.run { client.run }
+	end
+
+	def self.set_last_iq_id(iq_id)
+		if not @last_iq_id.empty? then
+			log 'WARNING: last iq id is non-empty (' + @last_iq_id +
+				'); pings too frequent or server not responding'
+		end
+
+		log 'setting last iq id to ' + iq_id
+		@last_iq_id = iq_id
+	end
+
+	def self.set_last_reply_address(reply_address)
+		if not @last_reply_address.empty? then
+			log 'WARNING: last reply address is non-empty (' +
+				@last_reply_address +
+				'); pings too frequent or server not responding'
+		end
+
+		log 'setting last reply address to ' + reply_address
+		@last_reply_address = reply_address
 	end
 
 	def self.zmq_terminate
@@ -115,6 +138,33 @@ module SMSRelay
 		log "<<< received iq stanza ==>"
 		log_raw i.inspect
 		log "<== end of iq stanza"
+
+		if i.id == @last_iq_id then
+			log 'last iq id (' + @last_iq_id +
+				") matches this message's id (" + i.id +
+				') so replying to ' + @last_reply_address
+
+			out_message = {
+				'type_requested'	=> 'ping',
+				'services_up'		=> 'all',
+				'reply_address'		=> @last_reply_address,
+				'iq_id'			=> i.id
+			}
+
+			log 'sending ' + out_message.to_s
+			inquisitor = @zmq_context.socket(ZMQ::PUSH)
+			inquisitor.bind('ipc://' + @last_reply_address)
+			inquisitor.send_string(JSON.dump out_message)
+			inquisitor.close
+			log 'message sent to ' + @last_reply_address
+
+			@last_iq_id = ''
+			@last_reply_address = ''
+		else
+			log 'WARNING: last iq id (' + @last_iq_id +
+				") does not match this message's id (" + i.id +
+				') so not replying to ' + @last_reply_address
+		end
 	end
 
 	pubsub do |s|
@@ -124,7 +174,7 @@ module SMSRelay
 	end
 end
 
-SMSRelay.log 'starting Sopranica SMS Relay v0.09'
+SMSRelay.log 'starting Sopranica SMS Relay v0.12'
 
 context = ZMQ::Context.new
 
@@ -158,8 +208,54 @@ loop do
 	poller.readables.each do |socket|
 		if socket === monitor
 			monitor.recv_string(stuff = '')
-			SMSRelay.log 'received monitor message: "' + stuff \
-				+ '"; ERROR: these are currently unsupported'
+			SMSRelay.log 'received monitor message: "' + stuff + '"'
+
+			in_message = JSON.parse stuff
+			SMSRelay.log 'formatted message: ' + in_message.to_s
+
+			if 'ping' == in_message['type_requested'] then
+				SMSRelay.log 'processing ping request'
+			else
+				SMSRelay.log 'unsupported requested type: "' +
+					in_message['type_requested']
+				next
+			end
+
+			out_message = {
+				'type_requested'=> 'ping',
+				'services_up'	=> 'rpc',
+				'reply_address'	=> in_message['reply_address']
+			}
+
+			SMSRelay.log 'sending ping reply 1: ' + out_message.to_s
+			inquisitor = context.socket(ZMQ::PUSH)
+			inquisitor.bind('ipc://' + in_message['reply_address'])
+			inquisitor.send_string(JSON.dump out_message)
+			SMSRelay.log 'sent to ' + in_message['reply_address']
+
+			msg = Blather::Stanza::Iq::Ping.new(:get, 's.ms')
+
+			SMSRelay.set_last_iq_id(msg.id)
+			SMSRelay.set_last_reply_address(
+				in_message['reply_address'])
+
+			SMSRelay.log '>>> sending ping message ==>'
+			SMSRelay.log_raw msg.inspect
+			SMSRelay.log '<== end of message to send'
+
+			SMSRelay.log 'oMSG - ' + SMSRelay.jid.node + ': ' +
+				msg.to_s
+			SMSRelay.write_to_stream msg
+			SMSRelay.log 'oMSG [sent]'
+
+			# keep out_message the same, but replace services_up val
+			out_message['services_up'] = 'xmpp_send'
+
+			SMSRelay.log 'sending ping reply 2: ' + out_message.to_s
+			inquisitor.send_string(JSON.dump out_message)
+			inquisitor.close
+			SMSRelay.log 'sent to ' + in_message['reply_address']
+
 		elsif socket === receiver
 			receiver.recv_string(stuff = '')
 			SMSRelay.log 'received a message (raw): ' + stuff
