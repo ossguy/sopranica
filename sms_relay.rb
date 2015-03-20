@@ -104,6 +104,11 @@ module SMSRelay
 
 	when_ready { log 'ready to send messages; TODO - block send until now' }
 
+	disconnected {
+		log 'disconnected; reconnecting now...'
+		client.connect
+	}
+
 	message :chat?, :body do |m|
 		user_forward = normalize m.to.node
 		user_device = normalize m.from.node
@@ -174,7 +179,7 @@ module SMSRelay
 	end
 end
 
-SMSRelay.log 'starting Sopranica SMS Relay v0.12'
+SMSRelay.log 'starting Sopranica SMS Relay v0.13'
 
 context = ZMQ::Context.new
 
